@@ -1,0 +1,9 @@
+    file    |   serial  |   parallel
+    gen10   |   0.0005  |   
+    gen15   |   0.13    |   
+    gen19   |   1.03    |   
+    gen20   |   44.8    |   
+    gen22   |
+    gen23   |
+    gen26   |
+    gen30   |
