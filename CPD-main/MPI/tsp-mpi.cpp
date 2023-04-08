@@ -26,7 +26,7 @@ int main(int argc, char *argv[]) {
 
     // calculate tsp
     double start_time = MPI_Wtime();
-    pair<vector<int>, double> results = tsp(start, end);
+    pair<vector<int>, double> results = tsp(start, end, rank);
     double end_time = MPI_Wtime();
 
     // gather results
@@ -190,7 +190,7 @@ void TSPBB(PriorityQueue<QueueElem> &myQueue, vector<int> &BestTour, vector<pair
     }
 }
 
-pair<vector<int>, double> tsp(int start, int end) {
+pair<vector<int>, double> tsp(int start, int end, int rank) {
     int num_threads = omp_get_max_threads();
     vector<int> BestTour = {0};
     BestTour.reserve(numCities + 1);

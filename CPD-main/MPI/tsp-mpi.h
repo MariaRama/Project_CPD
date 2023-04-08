@@ -6,6 +6,7 @@
 #include <utility>
 #include <omp.h>
 #include <mpi.h>
+#include <limits>
 
 using namespace std;
 
@@ -19,7 +20,7 @@ double initialLB(vector<pair<double,double>> &mins);
 double calculateLB(vector<pair<double,double>> &mins, int f, int t, double LB);
 void create_children(QueueElem &myElem, PriorityQueue<QueueElem> &myQueue, vector<pair<double,double>> &mins);
 void TSPBB(PriorityQueue<QueueElem> &myQueue, vector<int> &BestTour, vector<pair<double,double>> &mins);
-pair<vector <int>, double> tsp(int start, int end);
+pair<vector <int>, double> tsp(int start, int end, int rank);
 
 // global variables
 double BestTourCost;
