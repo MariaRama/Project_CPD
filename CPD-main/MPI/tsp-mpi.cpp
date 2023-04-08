@@ -6,6 +6,8 @@
 int main(int argc, char *argv[]) {
     double exec_time;
 
+    omp_set_num_threads(2);
+    
     int num_processes, rank;
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &num_processes);
