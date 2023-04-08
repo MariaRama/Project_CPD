@@ -3,18 +3,52 @@
 int main(int argc, char *argv[]) {
     double exec_time;
 
-    parse_inputs(argc, argv);
+    int num_processes, rank;
+    MPI_Init(&argc, &argv);
+    MPI_Comm_size(MPI_COMM_WORLD, &num_processes);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    exec_time = -omp_get_wtime();
+    if(rank == 0) {
+        parse_inputs(argc, argv);
+    }
 
-    pair<vector <int>, double> results = tsp();
+    //MPI_Bcast sends the message from the root process to all other processes
+    MPI_Bcast(&numCities, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&numRoads, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&BestTourCost, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-    exec_time += omp_get_wtime();
+    // divide work among processes
+    int start = rank * numCities / num_processes;
+    int end = (rank + 1) * numCities / num_processes;
 
-    cout << "Execution time: " << exec_time << endl;
+    // calculate tsp
+    double start_time = MPI_Wtime();
+    pair<vector<int>, double> results = tsp(start, end);
+    double end_time = MPI_Wtime();
 
-    print_result(results.first, results. second); // to the stdout!
+    // gather results
+    //MPI_Gather collects data from all processes in the communicator comm, and sends it to the root process
+    vector<pair<vector<int>, double>> all_results(num_processes);
+    MPI_Gather(&results, sizeof(pair<vector<int>, double>), MPI_BYTE,
+               &all_results[0], sizeof(pair<vector<int>, double>), MPI_BYTE,
+               0, MPI_COMM_WORLD);
 
+    if(rank == 0) {
+        exec_time = end_time - start_time;
+        cout << "Execution time: " << exec_time << endl;
+
+        // find best result
+        pair<vector<int>, double> best_result = all_results[0];
+        for(int i=1; i<num_processes; i++) {
+            if(all_results[i].second < best_result.second) {
+                best_result = all_results[i];
+            }
+        }
+
+        print_result(best_result.first, best_result.second);
+    }
+
+    MPI_Finalize();
     return 0;
 }
 
