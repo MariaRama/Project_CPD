@@ -5,6 +5,7 @@
 #include <vector>
 #include <utility>
 #include <omp.h>
+#include <mpi.h>
 
 using namespace std;
 
