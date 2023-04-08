@@ -86,6 +86,91 @@ void parse_inputs(int argc, char *argv[]) {
     BestTourCost = atof(argv[2]);
 }
 
+pair<vector<int>, double> tsp(int start, int end) {
+    int num_threads = omp_get_max_threads();
+    vector<int> BestTour = {0};
+    BestTour.reserve(numCities + 1);
+
+    vector<pair<double, double>> mins = get_mins();
+
+    QueueElem myElem = {{0}, 0.0, initialLB(mins), 1, 0};
+
+    vector<PriorityQueue<QueueElem>> queues;
+    queues.reserve(num_threads);
+
+    int cnt = 0;
+    bool visitedCities[numCities] = {false};
+
+    while (cnt < num_threads) {
+        for (int city : myElem.tour) {
+            visitedCities[city] = true;
+        }
+        for (int v = 0; v < numCities; v++) {
+            double dist = distances[myElem.node][v];
+            if (dist > 0 && !visitedCities[v]) {
+                double newBound = calculateLB(mins, myElem.node, v, myElem.bound);
+                vector<int> newTour = myElem.tour;
+                newTour.push_back(v);
+                if (cnt < num_threads) {
+                    PriorityQueue<QueueElem> newQueue;
+                    newQueue.push({newTour, myElem.cost + dist, newBound, myElem.length + 1, v});
+                    queues.push_back(newQueue);
+                } else
+                    queues[cnt % num_threads].push({newTour, myElem.cost + dist, newBound, myElem.length + 1, v});
+                cnt++;
+            }
+        }
+        if (cnt < num_threads) {
+            cnt--;
+            myElem = queues[cnt].pop();
+            queues.pop_back();
+        }
+    }
+
+    bool done = false;
+    #pragma omp parallel
+    {
+        int tid = omp_get_thread_num();
+        while (!done) {
+            TSPBB(queues[tid], BestTour, mins);
+            done = true;
+
+            if (queues[tid].empty()) {
+                #pragma omp critical(queues_access)
+                {
+                    for (int i = 0; i < num_threads; i++) {
+                        if (!queues[i].size() > num_threads) {
+                            QueueElem myElem = queues[i].pop();
+                            queues[tid].push(myElem);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            #pragma omp reduction(&&:done)
+            {
+                if (!queues[tid].empty()) {
+                    done = false;
+                }
+            }
+            #pragma omp barrier
+        }
+    }
+
+    // gather the best tour and cost from all processes
+    vector<int> bestTour(numCities + 1);
+    double bestCost;
+    MPI_Reduce(&BestTour[0], &bestTour[0], numCities + 1, MPI_INT, MPI_MIN, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&BestTourCost, &bestCost, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
+
+    if (rank == 0) {
+        return make_pair(bestTour, bestCost);
+    } else {
+        return make_pair(vector<int>(), numeric_limits<double>::infinity());
+    }
+}
+
 void print_result(vector <int> BestTour, double BestTourCost) {
     if(BestTour.size() != numCities+1) {
         cout << "NO SOLUTION" << endl;
@@ -97,10 +182,4 @@ void print_result(vector <int> BestTour, double BestTourCost) {
         }
         cout << endl;
     }
-}
-
-pair<vector <int>, double> tsp() {
-    vector <int> BestTour = {0};
-    
-    return make_pair(BestTour, BestTourCost);
 }
