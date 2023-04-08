@@ -1,5 +1,8 @@
 #include "tsp-mpi.h"
 
+#define NUM_SWAPS 3
+#define NUM_ITERATIONS 30
+
 int main(int argc, char *argv[]) {
     double exec_time;
 
@@ -84,6 +87,107 @@ void parse_inputs(int argc, char *argv[]) {
         exit(-1);
 
     BestTourCost = atof(argv[2]);
+}
+
+vector<pair<double,double>> get_mins() {
+    vector<pair<double,double>> mins;
+    mins.reserve(numCities);
+
+    for (int i=0; i<numCities; i++) {
+        double min1 = BestTourCost;
+        double min2 = BestTourCost;
+        for (int j=0; j<numCities; j++) {
+            double dist = distances[i][j];
+            if(dist > 0) {
+                if(dist <= min1) {
+                    min2 = min1;
+                    min1 = dist;
+                }else if(dist <= min2) {
+                    min2 = dist;
+                }
+            }
+        }
+        mins[i] = make_pair(min1, min2);
+    }
+
+    return mins;
+}
+
+double initialLB(vector<pair<double,double>> &mins) {
+    double LB=0;
+
+    for(int i=0; i<numCities; i++) {
+        LB += (mins[i].first + mins[i].second)/2;
+    }
+    return LB;
+}
+
+double calculateLB(vector<pair<double,double>> &mins, int f, int t, double LB) {
+    double cf, ct;
+    double directCost = distances[f][t];
+
+    if(distances[f][t] <= 0)
+        exit(-1);
+
+    if(directCost >= mins[f].second) {
+        cf = mins[f].second;
+    }else
+        cf = mins[f].first;
+
+    if(directCost >= mins[t].second) {
+        ct = mins[t].second;
+    }else
+        ct = mins[t].first;
+
+    return LB + directCost - (cf+ct)/2;
+}
+
+void create_children(QueueElem &myElem, PriorityQueue<QueueElem> &myQueue, vector<pair<double,double>> &mins) {
+    bool visitedCities[numCities] = {false};
+
+    for (int city : myElem.tour) {
+        visitedCities[city] = true;
+    }
+
+    for(int v=0; v<numCities; v++) {
+        double dist = distances[myElem.node][v];
+        if(dist>0 && !visitedCities[v]) {
+            double newBound = calculateLB(mins, myElem.node, v, myElem.bound);                       
+            if(newBound <= BestTourCost) {
+                vector <int> newTour = myElem.tour;
+                newTour.push_back(v);
+                myQueue.push({newTour, myElem.cost + dist, newBound, myElem.length+1, v});
+            }
+        }
+    }
+}
+
+void TSPBB(PriorityQueue<QueueElem> &myQueue, vector<int> &BestTour, vector<pair<double,double>> &mins) {
+    #pragma omp for
+    for(int iter=0; iter<NUM_ITERATIONS; iter++){
+        if(myQueue.size() > 0) {
+            QueueElem myElem = myQueue.pop();
+
+            if(myElem.bound >= BestTourCost) {
+                myQueue.clear();
+            }else {
+                if(myElem.length == numCities) {
+                    double dist = distances[myElem.node][0];
+                    if(dist > 0) {
+                        if(myElem.cost + dist <= BestTourCost) {
+                            #pragma omp critical(access_best)
+                            {
+                                BestTour = myElem.tour;
+                                BestTour.push_back(0);
+                                BestTourCost = myElem.cost + dist;
+                            }
+                        }
+                    }
+                }else 
+                    create_children(myElem, myQueue, mins);
+            }
+        }
+    }
 }
 
 pair<vector<int>, double> tsp(int start, int end) {
